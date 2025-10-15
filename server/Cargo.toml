@@ -1,0 +1,31 @@
+[package]
+name = "familychat-server"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0"
+axum = { version = "0.7", features = ["macros", "ws"] }
+dotenvy = "0.15"
+futures = "0.3"
+redis = { version = "0.23", features = ["aio", "tokio-comp", "connection-manager"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_with = "3.6"
+sqlx = { version = "0.7", features = ["postgres", "runtime-tokio-rustls", "migrate", "chrono", "uuid"] }
+tokio = { version = "1.36", features = ["macros", "rt-multi-thread", "signal"] }
+tower = { version = "0.4", features = ["util"] }
+tower-http = { version = "0.5", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+uuid = { version = "1.6", features = ["serde", "v4"] }
+chrono = { version = "0.4", features = ["serde"] }
+async-trait = "0.1"
+thiserror = "1.0"
+hmac = "0.12"
+sha2 = "0.10"
+hkdf = "0.12"
+base64 = "0.21"
+[lib]
+name = "familychat_server"
+path = "src/lib.rs"

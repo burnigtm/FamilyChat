@@ -1,0 +1,84 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: familychat
+      POSTGRES_USER: familychat
+      POSTGRES_PASSWORD: familychat
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+
+  minio:
+    image: quay.io/minio/minio:RELEASE.2024-01-11T00-00-00Z
+    command: ["server", "/data", "--console-address", ":9001"]
+    environment:
+      MINIO_ROOT_USER: familychat
+      MINIO_ROOT_PASSWORD: familychat-secret
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+
+  livekit:
+    image: livekit/livekit-server:latest
+    command: ["--config", "/livekit/config.yaml"]
+    ports:
+      - "7880:7880"
+      - "7881:7881/udp"
+    env_file:
+      - .env
+    volumes:
+      - ./livekit/config.yaml:/livekit/config.yaml:ro
+
+  server:
+    build:
+      context: ..
+      dockerfile: infra/server.Dockerfile
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://familychat:familychat@postgres:5432/familychat
+      REDIS_URL: redis://redis:6379
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ACCESS_KEY: familychat
+      MINIO_SECRET_KEY: familychat-secret
+      LIVEKIT_URL: http://livekit:7880
+      LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
+      LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
+      JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret}
+    depends_on:
+      - postgres
+      - redis
+      - minio
+      - livekit
+
+  caddy:
+    image: caddy:2.7
+    ports:
+      - "80:80"
+      - "443:443"
+    env_file:
+      - .env
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - server
+      - livekit
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  caddy_data:
+  caddy_config:

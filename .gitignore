@@ -1,0 +1,16 @@
+# Rust
+/target
+**/*.rs.bk
+
+# Flutter / Dart
+client/flutter/.dart_tool/
+client/flutter/build/
+client/flutter/ios/Pods/
+client/flutter/windows/flutter/
+
+# Node / misc tooling
+node_modules/
+
+# Environment
+.env
+.env.*
