@@ -10,6 +10,8 @@ client/flutter/windows/flutter/
 
 # Node / misc tooling
 node_modules/
+client/web/dist/
+client/web/*.tsbuildinfo
 
 # Environment
 .env

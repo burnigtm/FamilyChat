@@ -1,18 +1,28 @@
 use axum::{
-    extract::State,
-    routing::{post, put},
+    extract::{State},
+    http::{HeaderMap, StatusCode},
+    routing::{get, post, put},
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{Value};
 use uuid::Uuid;
 
-use crate::state::AppState;
+use crate::{
+    state::AppState,
+    store::{BootstrapPayload, LinkingTokenView, SessionView},
+};
+
+use super::{json_error, require_session};
+
+type ApiResult<T> = Result<Json<T>, (StatusCode, Json<Value>)>;
 
 pub fn router() -> Router<AppState> {
     Router::new()
+        .route("/bootstrap", get(bootstrap))
         .route("/devices/register", post(register_device))
         .route("/devices/link", post(link_device))
+        .route("/devices/link-token", post(create_link_token))
         .route("/devices/push-token", put(update_push_token))
 }
 
@@ -24,30 +34,28 @@ pub struct RegisterDeviceRequest {
     pub prekey_bundle: Value,
 }
 
-#[derive(Debug, Serialize)]
-pub struct RegisterDeviceResponse {
-    pub user_id: Uuid,
-    pub device_id: Uuid,
-    pub registration_token: String,
-}
-
 async fn register_device(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(payload): Json<RegisterDeviceRequest>,
-) -> Json<RegisterDeviceResponse> {
+) -> ApiResult<SessionView> {
     tracing::info!(
         display_name = %payload.display_name,
         device_label = %payload.device_label,
         platform = %payload.platform,
-        prekey_bundle = ?payload.prekey_bundle,
-        "Registering primary device"
+        has_prekey_bundle = !payload.prekey_bundle.is_null(),
+        "Registering browser or native device"
     );
 
-    Json(RegisterDeviceResponse {
-        user_id: Uuid::new_v4(),
-        device_id: Uuid::new_v4(),
-        registration_token: Uuid::new_v4().to_string(),
-    })
+    state
+        .store
+        .register_device(
+            payload.display_name,
+            payload.device_label,
+            payload.platform,
+            payload.prekey_bundle,
+        )
+        .map(Json)
+        .map_err(|error| json_error(StatusCode::BAD_REQUEST, error.to_string()))
 }
 
 #[derive(Debug, Deserialize)]
@@ -58,43 +66,90 @@ pub struct LinkDeviceRequest {
     pub prekey_bundle: Value,
 }
 
-#[derive(Debug, Serialize)]
-pub struct LinkDeviceResponse {
-    pub device_id: Uuid,
-}
-
 async fn link_device(
-    State(_state): State<AppState>,
+    State(state): State<AppState>,
     Json(payload): Json<LinkDeviceRequest>,
-) -> Json<LinkDeviceResponse> {
+) -> ApiResult<SessionView> {
     tracing::info!(
-        linking_token = %payload.linking_token,
         device_label = %payload.device_label,
         platform = %payload.platform,
-        prekey_bundle = ?payload.prekey_bundle,
+        has_prekey_bundle = !payload.prekey_bundle.is_null(),
         "Linking secondary device"
     );
 
-    Json(LinkDeviceResponse {
-        device_id: Uuid::new_v4(),
-    })
+    state
+        .store
+        .link_device(
+            payload.linking_token,
+            payload.device_label,
+            payload.platform,
+            payload.prekey_bundle,
+        )
+        .map(Json)
+        .map_err(|error| json_error(StatusCode::BAD_REQUEST, error.to_string()))
+}
+
+async fn create_link_token(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> ApiResult<LinkingTokenView> {
+    let session = require_session(&headers, &state)?;
+
+    state
+        .store
+        .create_linking_token(&session)
+        .map(Json)
+        .map_err(|error| json_error(StatusCode::BAD_REQUEST, error.to_string()))
+}
+
+async fn bootstrap(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> ApiResult<BootstrapPayload> {
+    let session = require_session(&headers, &state)?;
+    state
+        .store
+        .bootstrap(&session)
+        .map(Json)
+        .map_err(|error| json_error(StatusCode::BAD_REQUEST, error.to_string()))
 }
 
 #[derive(Debug, Deserialize)]
 pub struct UpdatePushTokenRequest {
-    pub device_id: Uuid,
+    pub device_id: Option<Uuid>,
     pub push_token: Option<String>,
 }
 
-async fn update_push_token(
-    State(_state): State<AppState>,
-    Json(payload): Json<UpdatePushTokenRequest>,
-) -> Json<Value> {
-    tracing::debug!(
-        device_id = %payload.device_id,
-        token_present = payload.push_token.is_some(),
-        "Updating push token"
-    );
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdatePushTokenResponse {
+    pub device_id: Uuid,
+    pub status: &'static str,
+}
 
-    Json(Value::String("ok".into()))
+async fn update_push_token(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(payload): Json<UpdatePushTokenRequest>,
+) -> ApiResult<UpdatePushTokenResponse> {
+    let session = require_session(&headers, &state)?;
+
+    if let Some(device_id) = payload.device_id {
+        if device_id != session.device_id {
+            return Err(json_error(
+                StatusCode::FORBIDDEN,
+                "push token updates are limited to the active device",
+            ));
+        }
+    }
+
+    state
+        .store
+        .update_push_token(&session, payload.push_token)
+        .map_err(|error| json_error(StatusCode::BAD_REQUEST, error.to_string()))?;
+
+    Ok(Json(UpdatePushTokenResponse {
+        device_id: session.device_id,
+        status: "ok",
+    }))
 }

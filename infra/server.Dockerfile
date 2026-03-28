@@ -1,3 +1,13 @@
+FROM node:22-bookworm-slim AS web-builder
+
+WORKDIR /web/client/web
+
+COPY client/web/package*.json ./
+RUN npm install
+
+COPY client/web/ ./
+RUN npm run build
+
 FROM rust:1.75 AS builder
 
 WORKDIR /app
@@ -22,8 +32,10 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y ca-certificates openssl && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /app/target/release/familychat-server /usr/local/bin/familychat-server
+COPY --from=web-builder /web/client/web/dist /var/www/familychat
 
 ENV RUST_LOG=info
+ENV WEB_ROOT=/var/www/familychat
 
 EXPOSE 8080
 

@@ -7,6 +7,7 @@ pub mod models;
 pub mod push;
 pub mod routes;
 pub mod state;
+pub mod store;
 pub mod ws;
 
 pub use routes::router;

@@ -8,22 +8,11 @@
 {$FAMILYCHAT_DOMAIN:-familychat.localhost} {
     encode gzip
 
-    @api {
-        path /health /v1/* /api/*
-    }
-    handle @api {
-        reverse_proxy server:8080
-    }
-
-    handle /ws* {
-        reverse_proxy server:8080
-    }
-
-    handle /livekit* {
+    handle_path /livekit* {
         reverse_proxy livekit:7880
     }
 
     handle {
-        respond "FamilyChat edge online" 200
+        reverse_proxy server:8080
     }
 }
