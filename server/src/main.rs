@@ -5,9 +5,8 @@
 //! will be implemented across the milestones defined in `plan.md`.
 
 use familychat_server::{
-    config::Settings, db, push, routes, state::AppState, ws,
+    config::Settings, routes, state::AppState, store::AppStore, ws,
 };
-use std::sync::Arc;
 use tokio::net::TcpListener;
 use tracing::info;
 use tracing_subscriber::EnvFilter;
@@ -19,17 +18,9 @@ async fn main() -> anyhow::Result<()> {
 
     let settings = Settings::from_env()?;
     let bind_address = settings.bind_address.clone();
-
-    let database = db::Database::connect(&settings.database_url).await?;
-    let push = push::PushFanout::connect(&settings.redis_url).await?;
+    let store = AppStore::load(&settings.state_file)?;
     let hub = ws::ChatHub::default();
-    let app_state = AppState::new(database, push, settings, hub);
-
-    tracing::debug!(
-        db_refs = Arc::strong_count(&app_state.db),
-        config_has_jwt = !app_state.config.jwt_secret.is_empty(),
-        "App state initialized"
-    );
+    let app_state = AppState::new(settings, store, hub);
 
     let app = routes::router(app_state);
 

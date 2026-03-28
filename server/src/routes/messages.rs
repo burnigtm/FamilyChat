@@ -1,12 +1,21 @@
 use axum::{
     extract::State,
+    http::{HeaderMap, StatusCode},
     routing::post,
     Json, Router,
 };
 use serde::{Deserialize, Serialize};
+use serde_json::{json, Value};
 use uuid::Uuid;
 
-use crate::state::AppState;
+use crate::{
+    state::AppState,
+    store::{ConversationMessage, ConversationSummary},
+};
+
+use super::{json_error, require_session};
+
+type ApiResult<T> = Result<Json<T>, (StatusCode, Json<Value>)>;
 
 pub fn router() -> Router<AppState> {
     Router::new().route("/messages", post(send_message))
@@ -15,58 +24,55 @@ pub fn router() -> Router<AppState> {
 #[derive(Debug, Deserialize)]
 pub struct SendMessageRequest {
     pub conversation_id: Uuid,
-    pub sender_device_id: Uuid,
-    pub recipient_device_ids: Vec<Uuid>,
     pub ciphertext: String,
-    pub message_type: String,
-    #[serde(default)]
-    pub attachments: Vec<MessageAttachment>,
-}
-
-#[derive(Debug, Deserialize, Serialize)]
-pub struct MessageAttachment {
-    pub attachment_id: Uuid,
-    pub object_key: String,
-    pub enc_key_ciphertext: String,
-    pub media_type: String,
-    pub size: i64,
+    pub nonce: String,
+    pub encryption: Option<String>,
+    pub sender_key_generation: Option<u32>,
 }
 
 #[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
 pub struct SendMessageResponse {
-    pub envelope_id: Uuid,
+    pub message: ConversationMessage,
+    pub summary: ConversationSummary,
     pub queued_for: usize,
 }
 
 async fn send_message(
     State(state): State<AppState>,
+    headers: HeaderMap,
     Json(payload): Json<SendMessageRequest>,
-) -> Json<SendMessageResponse> {
-    let envelope_id = Uuid::new_v4();
-    tracing::debug!(
-        conversation_id = %payload.conversation_id,
-        sender_device_id = %payload.sender_device_id,
-        message_type = %payload.message_type,
-        attachment_count = payload.attachments.len(),
-        "Dispatching encrypted message"
-    );
+) -> ApiResult<SendMessageResponse> {
+    let session = require_session(&headers, &state)?;
 
-    let event = serde_json::json!({
-        "envelope_id": envelope_id,
-        "conversation_id": payload.conversation_id,
-        "ciphertext": payload.ciphertext,
-        "message_type": payload.message_type,
-    });
+    let result = state
+        .store
+        .send_message(
+            &session,
+            payload.conversation_id,
+            payload.ciphertext,
+            payload.nonce,
+            payload.encryption,
+            payload.sender_key_generation,
+        )
+        .map_err(|error| json_error(StatusCode::BAD_REQUEST, error.to_string()))?;
 
-    for device_id in &payload.recipient_device_ids {
-        let _ = state
-            .push
-            .publish_device_event(&device_id.to_string(), &event.to_string())
-            .await;
+    let event = json!({
+        "event": "message_created",
+        "conversation": result.summary.clone(),
+        "message": result.message.clone(),
+    })
+    .to_string();
+
+    for device_id in &result.recipient_device_ids {
+        state
+            .hub
+            .send_to_device(&device_id.to_string(), event.clone());
     }
 
-    Json(SendMessageResponse {
-        envelope_id,
-        queued_for: payload.recipient_device_ids.len(),
-    })
+    Ok(Json(SendMessageResponse {
+        message: result.message,
+        summary: result.summary,
+        queued_for: result.queued_for,
+    }))
 }

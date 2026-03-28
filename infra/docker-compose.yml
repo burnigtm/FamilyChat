@@ -48,13 +48,17 @@ services:
     environment:
       DATABASE_URL: postgres://familychat:familychat@postgres:5432/familychat
       REDIS_URL: redis://redis:6379
+      STATE_FILE: /var/lib/familychat/state.json
+      WEB_ROOT: /var/www/familychat
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ACCESS_KEY: familychat
       MINIO_SECRET_KEY: familychat-secret
-      LIVEKIT_URL: http://livekit:7880
+      LIVEKIT_URL: ${LIVEKIT_URL:-wss://familychat.localhost/livekit}
       LIVEKIT_API_KEY: ${LIVEKIT_API_KEY:-devkey}
       LIVEKIT_API_SECRET: ${LIVEKIT_API_SECRET:-devsecret}
       JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret}
+    volumes:
+      - server_data:/var/lib/familychat
     depends_on:
       - postgres
       - redis
@@ -80,5 +84,6 @@ volumes:
   postgres_data:
   redis_data:
   minio_data:
+  server_data:
   caddy_data:
   caddy_config:

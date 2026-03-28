@@ -1,97 +1,109 @@
 # FamilyChat
 
-FamilyChat is a secure, self-hosted messenger for families that combines end-to-end encrypted messaging, attachments, and LiveKit-powered calls. The project mirrors the milestones defined in [`plan.md`](plan.md) and is split across Flutter clients, a shared Rust crypto core, a Rust backend service, and Docker-based infrastructure assets.
+FamilyChat is a self-hosted family messenger with a React web client, a Rust backend service, a shared Rust crypto core, and Docker-based infrastructure assets. The active UI surface now lives in `client/web`; the older Flutter client remains in the repository as a prototype reference.
 
 ## Repository Structure
 
-```
+```text
 .
-├── client/flutter            # Flutter app for Android, iOS, Windows
-│   ├── lib/
-│   │   ├── bridge/           # FFI glue (stubbed) for the Rust crypto core
-│   │   ├── chat/             # Conversation UI + controllers
-│   │   ├── calls/            # LiveKit call lobby placeholder
-│   │   ├── data/             # Drift database bootstrap
-│   │   └── services/         # HTTP + WebSocket clients
-├── core/crypto               # Rust crate exposing FFI-compatible E2EE helpers
-├── server                    # Axum backend for device registry and messaging
-├── infra                     # Docker Compose, Caddy, LiveKit configuration
-└── plan.md                   # Master implementation roadmap
+|-- client/
+|   |-- web/                 # React + Vite web client
+|   `-- flutter/             # Legacy Flutter prototype
+|-- core/crypto/             # Shared Rust crypto experiments
+|-- server/                  # Axum API, websocket hub, persisted app store
+|-- infra/                   # Docker Compose, Caddy, LiveKit configuration
+`-- plan.md                  # Master implementation roadmap
 ```
 
 ## Prerequisites
 
-- **Rust** 1.75+ (`rustup` recommended). Ensure `%USERPROFILE%\.cargo\bin` is on your `PATH`.
-- **Flutter** 3.24 (stable channel). Add `C:\src\flutter\bin` (or your install path) to the `PATH`.
-- **Docker & Docker Compose** for running the infrastructure bundle.
-
-After installing the toolchains, open a new shell so the updated `PATH` values are picked up.
+- Rust 1.75+ (`rustup` recommended)
+- Node.js 22+
+- npm 10+
+- Docker & Docker Compose
 
 ## Development Workflow
 
-### Rust workspace
+### Rust server
 
 ```powershell
 # From repo root
-cargo check
-cargo test
+cargo check -p familychat-server
+cargo test -p familychat-server
 ```
 
-The workspace currently includes:
-- `core/crypto`: FFI-friendly stubs for Signal-style identity/prekey generation, message encryption placeholders, and group sender key rotation.
-- `server`: Axum service exposing REST + WebSocket endpoints, Redis fan-out, and LiveKit key derivation helpers.
+The server now provides:
 
-### Flutter client
+- device registration and session bootstrap
+- short-lived browser linking tokens
+- room creation and membership management
+- per-device wrapped room keys and encrypted message envelopes backed by a JSON state file
+- device-scoped websocket delivery for live updates
+- LiveKit access token issuance for encrypted calls
+- static serving for the built React bundle
+
+### React web client
 
 ```powershell
-cd client/flutter
-flutter pub get
-flutter analyze
-flutter test
+cd client/web
+npm install
+npm run dev
 ```
 
-The Flutter application is scaffolded with Riverpod state management and GoRouter navigation. It currently mocks crypto operations via `lib/bridge/crypto_stub.dart`, paving the way for `flutter_rust_bridge` integration once the Rust FFI is stable.
+The web client includes:
+
+- browser device registration and token-based linking
+- local persistence for session, device keys, room keys, room list, and cached timelines
+- browser-side room-key wrapping and message encryption with Web Crypto
+- split-pane room and thread layout
+- group membership changes with room-key rotation
+- LiveKit voice/video calls with client-side E2EE key derivation
+- websocket-driven live updates
+- env-based API and websocket endpoints via `VITE_API_BASE_URL` and `VITE_WS_BASE_URL`
+
+Create a production build with:
+
+```powershell
+cd client/web
+npm run build
+```
 
 ### Infrastructure
 
-Bootstrap a local stack with Docker Compose:
+Bootstrap the full stack with Docker Compose:
 
 ```powershell
 cd infra
-copy .env.example .env   # update secrets & domain
+copy .env.example .env
 docker compose up --build
 ```
 
 Services:
-- `server`: Axum binary from this workspace
-- `postgres`: chat metadata
-- `redis`: push fan-out + background jobs
+
+- `server`: Axum server plus the built React bundle
+- `postgres`: reserved for later structured persistence work
+- `redis`: reserved for later fan-out/background work
 - `minio`: attachment storage
 - `livekit`: WebRTC SFU
-- `caddy`: TLS termination and routing
+- `caddy`: TLS termination and edge routing
 
-### Testing Strategy
+The server persists its current room/message state at `/var/lib/familychat/state.json` inside the container, backed by the `server_data` Docker volume.
+Set `LIVEKIT_URL` to the public websocket endpoint that browsers should connect to. The default compose setup expects `wss://familychat.localhost/livekit`, which Caddy proxies to the LiveKit container.
 
-The repository includes unit tests that exercise:
-- Crypto crate FFI contracts and data structures (`core/crypto/src/lib.rs`, `core/crypto/tests`).
-- Server-side key derivation, models, and placeholder routes (`server/src/**`, `server/tests`).
-- Flutter widget and provider logic (under `client/flutter/test/`).
-
-Run either workspace tests or individual package suites when contributing new features.
+## Testing
 
 ```powershell
-cargo test                    # Rust tests
-flutter test                  # Flutter unit/widget tests
+cargo test -p familychat-server
+cd client/web; npm run build
 ```
 
-## Documentation & Roadmap
+The Flutter tests under `client/flutter/test` still cover the legacy prototype, but the React web client is now the primary app surface.
 
-- `plan.md` captures the full milestone roadmap (M0 infrastructure through M8 hardening).
-- Inline Rust doc comments provide contextual details for core modules and FFI surfaces.
-- The Flutter codebase includes TODO markers where LiveKit integration and real data synchronization will land.
+## Notes
 
-Contributions should update milestone progress in `plan.md` as features graduate through the roadmap.
+- `plan.md` still describes broader milestones such as attachments, push, and native clients.
+- The active React web app now covers browser E2EE rooms, linked browser devices, encrypted message sync, and LiveKit call join flow. The legacy Flutter app remains prototype reference code.
 
 ## License
 
-Apache 2.0 / MIT dual license (mirroring `libsignal-client`). Individual marketplace assets (e.g., Flutter icons) must respect their original licenses.
+Apache 2.0 / MIT dual license (mirroring `libsignal-client`). Individual marketplace assets must respect their original licenses.
