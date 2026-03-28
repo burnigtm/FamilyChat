@@ -4,7 +4,11 @@
 
 # Flutter / Dart
 client/flutter/.dart_tool/
+client/flutter/.flutter-plugins
+client/flutter/.flutter-plugins-dependencies
 client/flutter/build/
+client/flutter/android/.gradle/
+client/flutter/android/local.properties
 client/flutter/ios/Pods/
 client/flutter/windows/flutter/
 

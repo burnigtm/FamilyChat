@@ -1,42 +1,35 @@
-import 'package:familychat/bridge/crypto_stub.dart';
-import 'package:familychat/chat/chat_home_page.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:familychat/app.dart';
+import 'package:familychat/models.dart';
+import 'package:familychat/services/app_storage.dart';
 import 'package:flutter_test/flutter_test.dart';
-
-class _StubCryptoBridge implements CryptoBridge {
-  @override
-  Future<String> decryptMessage(Map<String, dynamic> envelope) async =>
-      envelope.toString();
-
-  @override
-  Future<String> encryptMessage(Map<String, dynamic> payload) async =>
-      payload.toString();
-
-  @override
-  Future<IdentityBundle> generateIdentity() async => IdentityBundle(
-        deviceId: 'device-test',
-        registrationId: 1337,
-        identityKey: 'fake',
-      );
-}
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 void main() {
-  testWidgets('chat home page renders conversations', (tester) async {
+  testWidgets('renders the Android auth shell when no session exists', (tester) async {
     await tester.pumpWidget(
       ProviderScope(
         overrides: [
-          cryptoBridgeProvider.overrideWithValue(_StubCryptoBridge()),
+          appStorageProvider.overrideWithValue(_EmptyStorage()),
         ],
-        child: const MaterialApp(
-          home: ChatHomePage(),
-        ),
+        child: const FamilyChatApp(),
       ),
     );
 
     await tester.pumpAndSettle();
 
-    expect(find.text('FamilyChat'), findsOneWidget);
-    expect(find.byType(ListTile), findsNWidgets(2));
+    expect(find.text('FamilyChat Android'), findsOneWidget);
+    expect(find.text('Register encrypted Android device'), findsOneWidget);
+    expect(find.text('Link'), findsOneWidget);
   });
+}
+
+class _EmptyStorage implements AppStorage {
+  @override
+  Future<void> clear() async {}
+
+  @override
+  Future<FamilyChatCacheSnapshot> load() async => FamilyChatCacheSnapshot.empty();
+
+  @override
+  Future<void> save(FamilyChatCacheSnapshot snapshot) async {}
 }

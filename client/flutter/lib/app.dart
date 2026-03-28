@@ -1,22 +1,20 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'router.dart';
+import 'chat/chat_home_page.dart';
 
-class FamilyChatApp extends ConsumerWidget {
+class FamilyChatApp extends StatelessWidget {
   const FamilyChatApp({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final router = ref.watch(routerProvider);
-    return MaterialApp.router(
+  Widget build(BuildContext context) {
+    return MaterialApp(
       title: 'FamilyChat',
       theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.indigo),
+        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF1B6B6B)),
         brightness: Brightness.light,
         useMaterial3: true,
       ),
-      routerConfig: router,
+      home: const ChatHomePage(),
     );
   }
 }
