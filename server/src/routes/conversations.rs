@@ -23,9 +23,9 @@ type ApiResult<T> = Result<Json<T>, (StatusCode, Json<Value>)>;
 pub fn router() -> Router<AppState> {
     Router::new()
         .route("/conversations", get(list_conversations).post(create_conversation))
-        .route("/conversations/{id}", get(get_conversation_state))
-        .route("/conversations/{id}/members", post(add_member))
-        .route("/conversations/{id}/call", post(join_call))
+        .route("/conversations/:id", get(get_conversation_state))
+        .route("/conversations/:id/members", post(add_member))
+        .route("/conversations/:id/call", post(join_call))
 }
 
 #[derive(Debug, Serialize)]

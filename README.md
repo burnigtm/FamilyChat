@@ -1,6 +1,6 @@
 # FamilyChat
 
-FamilyChat is a self-hosted family messenger with a React web client, a Rust backend service, a shared Rust crypto core, and Docker-based infrastructure assets. The active UI surface now lives in `client/web`; the older Flutter client remains in the repository as a prototype reference.
+FamilyChat is a self-hosted family messenger with a React web client, an Android-focused Flutter client, a Rust backend service, a shared Rust crypto core, and Docker-based infrastructure assets.
 
 ## Repository Structure
 
@@ -8,7 +8,7 @@ FamilyChat is a self-hosted family messenger with a React web client, a Rust bac
 .
 |-- client/
 |   |-- web/                 # React + Vite web client
-|   `-- flutter/             # Legacy Flutter prototype
+|   `-- flutter/             # Flutter Android client
 |-- core/crypto/             # Shared Rust crypto experiments
 |-- server/                  # Axum API, websocket hub, persisted app store
 |-- infra/                   # Docker Compose, Caddy, LiveKit configuration
@@ -20,6 +20,7 @@ FamilyChat is a self-hosted family messenger with a React web client, a Rust bac
 - Rust 1.75+ (`rustup` recommended)
 - Node.js 22+
 - npm 10+
+- Flutter SDK
 - Docker & Docker Compose
 
 ## Development Workflow
@@ -68,6 +69,32 @@ cd client/web
 npm run build
 ```
 
+### Flutter Android client
+
+```powershell
+cd client/flutter
+flutter pub get
+
+# If this checkout does not yet contain generated Android files:
+flutter create . --platforms=android
+
+flutter test
+flutter test integration_test -d emulator-5554
+flutter run -d android
+```
+
+The Flutter client now includes:
+
+- Android device registration and token-based linking
+- persisted session, device keys, room keys, room list, and cached timelines
+- Android-side room-key wrapping and message encryption with `package:cryptography`
+- mobile room list, thread view, member rotation flow, and composer UI
+- LiveKit voice/video calls with client-side E2EE key derivation
+- websocket-driven live updates
+- env-based API and websocket endpoints via `FAMILYCHAT_API_BASE_URL` and `FAMILYCHAT_WS_BASE_URL`
+
+The generated Android platform scaffold is not committed in this branch because the Flutter SDK was not available in the current environment. Run `flutter create . --platforms=android` inside `client/flutter` before building on a workstation with Flutter installed.
+
 ### Infrastructure
 
 Bootstrap the full stack with Docker Compose:
@@ -95,14 +122,16 @@ Set `LIVEKIT_URL` to the public websocket endpoint that browsers should connect 
 ```powershell
 cargo test -p familychat-server
 cd client/web; npm run build
+cd client/flutter; flutter test
+cd client/flutter; flutter test integration_test -d emulator-5554
 ```
 
-The Flutter tests under `client/flutter/test` still cover the legacy prototype, but the React web client is now the primary app surface.
+The web client and Flutter Android client now both cover encrypted rooms, linked devices, encrypted message sync, and LiveKit call join flows. The Android client also includes `integration_test/` coverage for device or emulator runs. Rust tests remain the source of truth for the backend behavior.
 
 ## Notes
 
-- `plan.md` still describes broader milestones such as attachments, push, and native clients.
-- The active React web app now covers browser E2EE rooms, linked browser devices, encrypted message sync, and LiveKit call join flow. The legacy Flutter app remains prototype reference code.
+- `plan.md` still describes broader milestones such as attachments and push.
+- The active React web app and Flutter Android client both cover local E2EE room keys, linked devices, encrypted message sync, membership rotation, and LiveKit call join flow.
 
 ## License
 
